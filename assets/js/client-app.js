@@ -27,6 +27,23 @@ function primerNombre(nombreCompleto) {
   return (nombreCompleto || '').split(' ')[0];
 }
 
+function mostrarToast(mensaje, tipo = 'error') {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.className = 'toast-fixed';
+    document.body.appendChild(toast);
+  }
+  toast.className = `toast-fixed alert alert-${tipo}`;
+  toast.textContent = mensaje;
+  toast.style.display = 'block';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.style.display = 'none';
+  }, 3500);
+}
+
 async function init() {
   const partes = location.pathname.split('/').filter(Boolean);
   const codigo = partes[1];
@@ -243,7 +260,7 @@ async function guardarSerie(sesionId, ejercicioId, numeroSerie, row) {
   const repsVal = row.querySelector('.campo-reps').value;
   const completada = row.querySelector('.campo-completada').checked;
 
-  await supabase.from('registros_series').upsert(
+  const { error } = await supabase.from('registros_series').upsert(
     {
       sesion_id: sesionId,
       ejercicio_id: ejercicioId,
@@ -254,10 +271,33 @@ async function guardarSerie(sesionId, ejercicioId, numeroSerie, row) {
     },
     { onConflict: 'sesion_id,ejercicio_id,numero_serie' }
   );
+
+  if (error) {
+    console.error(error);
+    row.classList.add('input-set-error');
+    mostrarToast('No se pudo guardar esta serie. Comprueba tu conexión e inténtalo de nuevo.');
+  } else {
+    row.classList.remove('input-set-error');
+  }
 }
 
 async function terminarSesion(sesionId) {
-  await supabase.from('sesiones').update({ completada: true }).eq('id', sesionId);
+  const btn = document.getElementById('btn-terminar');
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  const { error } = await supabase.from('sesiones').update({ completada: true }).eq('id', sesionId);
+
+  if (error) {
+    console.error(error);
+    mostrarToast('No se pudo guardar la sesión. Comprueba tu conexión e inténtalo de nuevo.');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    return;
+  }
+
+  mostrarToast('Sesión guardada.', 'success');
   await renderDiasView();
 }
 
