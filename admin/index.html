@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artabria · Panel</title>
+<link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body>
+<div class="page page-wide">
+  <div class="topbar">
+    <div class="brand">Artabria</div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" id="btn-logout">Salir</button>
+    </div>
+  </div>
+  <div class="row mb-16">
+    <h1>Clientes</h1>
+    <button class="btn btn-primary btn-sm" id="btn-nuevo">+ Nuevo cliente</button>
+  </div>
+  <div id="alert"></div>
+  <form id="form-nuevo" class="card oculto">
+    <div class="field">
+      <label>Nombre del cliente</label>
+      <input type="text" id="nuevo-nombre" required>
+    </div>
+    <div class="field">
+      <label>Código del enlace</label>
+      <div class="input-set">
+        <input type="text" id="nuevo-codigo" class="grow" required>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-regenerar">↻</button>
+      </div>
+      <p class="hint">El enlace del cliente será tu-dominio/c/&lt;código&gt;</p>
+    </div>
+    <button type="submit" class="btn btn-primary btn-block">Crear cliente</button>
+  </form>
+  <div id="lista-clientes" class="stack"></div>
+</div>
+<script type="module" src="/assets/js/admin-dashboard.js"></script>
+</body>
+</html>
