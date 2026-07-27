@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient.js';
-import { escapeHtml, formatFecha } from './utils.js';
+import { escapeHtml, formatFecha, obtenerDetalleSesionHtml } from './utils.js';
 
 const app = document.getElementById('app');
 
@@ -105,8 +105,11 @@ function renderDias(rutina, dias) {
       <h1>Hola, ${escapeHtml(primerNombre(clienteActual.nombre))}</h1>
       <p class="muted">${rutina ? escapeHtml(rutina.nombre) : 'Aún no tienes una rutina asignada'}</p>
       <div class="stack mt-16" id="lista-dias"></div>
+      <button class="btn btn-ghost btn-block mt-16" id="btn-ver-historial">Ver historial</button>
     </div>
   `;
+
+  document.getElementById('btn-ver-historial').addEventListener('click', renderHistorial);
 
   const cont = document.getElementById('lista-dias');
   if (!dias.length) {
@@ -200,13 +203,15 @@ function renderEjercicioCard(ej, prevMap, curMap) {
       const n = i + 1;
       const prev = prevMap[`${ej.id}_${n}`];
       const cur = curMap[`${ej.id}_${n}`];
-      const placeholderPeso = prev && prev.peso != null ? `${prev.peso} kg` : 'kg';
-      const placeholderReps = prev && prev.reps != null ? `${prev.reps} reps` : 'reps';
+      // Si aún no hay nada guardado en esta sesión, se parte del peso/reps de la
+      // sesión anterior (editable) en vez de dejar el campo vacío.
+      const pesoValue = cur?.peso ?? prev?.peso ?? '';
+      const repsValue = cur?.reps ?? prev?.reps ?? '';
       return `
         <div class="input-set" data-ejercicio="${ej.id}" data-serie="${n}">
           <span class="muted" style="width:16px;flex-shrink:0">${n}</span>
-          <input type="number" step="0.5" inputmode="decimal" class="input-num campo-peso" placeholder="${placeholderPeso}" value="${cur?.peso ?? ''}">
-          <input type="number" inputmode="numeric" class="input-num campo-reps" placeholder="${placeholderReps}" value="${cur?.reps ?? ''}">
+          <input type="number" step="0.5" inputmode="decimal" class="input-num campo-peso" placeholder="kg" value="${pesoValue}">
+          <input type="number" inputmode="numeric" class="input-num campo-reps" placeholder="reps" value="${repsValue}">
           <input type="checkbox" class="checkbox-big campo-completada" ${cur?.completada ? 'checked' : ''}>
         </div>`;
     })
@@ -301,6 +306,82 @@ async function terminarSesion(sesionId) {
 
   mostrarToast('Sesión guardada.', 'success');
   await renderDiasView();
+}
+
+const detalleHistorialCache = {};
+
+async function renderHistorial() {
+  showLoading();
+  const { data: sesiones, error } = await supabase
+    .from('sesiones')
+    .select('id, fecha, dias(nombre)')
+    .eq('cliente_id', clienteActual.id)
+    .eq('completada', true)
+    .order('fecha', { ascending: false })
+    .limit(30);
+
+  app.className = 'page';
+  app.innerHTML = `
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" id="btn-volver-historial">← Volver</button>
+    </div>
+    <h1>Historial</h1>
+    <div class="stack mt-16" id="lista-historial"></div>
+  `;
+  document.getElementById('btn-volver-historial').addEventListener('click', renderDiasView);
+
+  const cont = document.getElementById('lista-historial');
+
+  if (error) {
+    cont.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  if (!sesiones || !sesiones.length) {
+    cont.innerHTML = `<div class="empty-state">Todavía no tienes sesiones terminadas.</div>`;
+    return;
+  }
+
+  sesiones.forEach((s) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = `
+      <div class="row" style="cursor:pointer">
+        <div>
+          <strong>${escapeHtml(s.dias?.nombre || 'Sesión')}</strong>
+          <div class="faint">${formatFecha(s.fecha)}</div>
+        </div>
+        <span class="muted toggle-icon">▾</span>
+      </div>
+      <div class="stack mt-16 oculto" data-detalle="${s.id}"></div>
+    `;
+    el.querySelector('.row').addEventListener('click', () => toggleDetalleHistorial(s.id, el));
+    cont.appendChild(el);
+  });
+}
+
+async function toggleDetalleHistorial(sesionId, cardEl) {
+  const slot = cardEl.querySelector(`[data-detalle="${sesionId}"]`);
+  const icon = cardEl.querySelector('.toggle-icon');
+  const estabaOculto = slot.classList.contains('oculto');
+
+  if (!estabaOculto) {
+    slot.classList.add('oculto');
+    icon.textContent = '▾';
+    return;
+  }
+
+  slot.classList.remove('oculto');
+  icon.textContent = '▴';
+
+  if (detalleHistorialCache[sesionId]) {
+    slot.innerHTML = detalleHistorialCache[sesionId];
+    return;
+  }
+
+  slot.innerHTML = `<div class="text-center"><span class="spinner"></span></div>`;
+  const html = await obtenerDetalleSesionHtml(sesionId);
+  detalleHistorialCache[sesionId] = html;
+  slot.innerHTML = html;
 }
 
 init();

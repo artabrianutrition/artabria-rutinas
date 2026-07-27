@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient.js';
 import { requireAdmin, logout } from './admin-guard.js';
-import { escapeHtml, qs, linkCliente } from './utils.js';
+import { escapeHtml, qs, linkCliente, formatFechaHora, obtenerDetalleSesionHtml } from './utils.js';
 
 const clienteId = qs('id');
 if (!clienteId) {
@@ -185,6 +185,68 @@ function mostrarFormEjercicio(diaId, ej) {
   slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+const detalleHistorialCache = {};
+
+async function cargarHistorial() {
+  const cont = document.getElementById('contenido-historial');
+  const { data: sesiones, error } = await supabase
+    .from('sesiones')
+    .select('id, fecha, completada, dias(nombre)')
+    .eq('cliente_id', clienteId)
+    .order('fecha', { ascending: false })
+    .limit(30);
+
+  if (error) {
+    cont.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  if (!sesiones.length) {
+    cont.innerHTML = `<div class="empty-state">Este cliente todavía no ha registrado ninguna sesión.</div>`;
+    return;
+  }
+
+  cont.innerHTML = '<div class="stack" id="lista-historial"></div>';
+  const lista = document.getElementById('lista-historial');
+  sesiones.forEach((s) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = `
+      <div class="row" style="cursor:pointer" data-accion="toggle-historial" data-id="${s.id}">
+        <div>
+          <strong>${escapeHtml(s.dias?.nombre || 'Sesión')}</strong>
+          <div class="faint">${formatFechaHora(s.fecha)}</div>
+        </div>
+        <span class="badge ${s.completada ? 'badge-success' : ''}">${s.completada ? 'Completada' : 'Sin terminar'}</span>
+      </div>
+      <div class="stack mt-16 oculto" data-detalle-historial="${s.id}"></div>
+    `;
+    lista.appendChild(el);
+  });
+}
+
+async function toggleDetalleHistorial(sesionId, filaEl) {
+  const card = filaEl.closest('.card');
+  const slot = card.querySelector(`[data-detalle-historial="${sesionId}"]`);
+  const estabaOculto = slot.classList.contains('oculto');
+
+  if (!estabaOculto) {
+    slot.classList.add('oculto');
+    return;
+  }
+
+  slot.classList.remove('oculto');
+
+  if (detalleHistorialCache[sesionId]) {
+    slot.innerHTML = detalleHistorialCache[sesionId];
+    return;
+  }
+
+  slot.innerHTML = `<div class="text-center"><span class="spinner"></span></div>`;
+  const html = await obtenerDetalleSesionHtml(sesionId);
+  detalleHistorialCache[sesionId] = html;
+  slot.innerHTML = html;
+}
+
 async function moverDia(diaId, dir) {
   const idx = state.dias.findIndex((d) => d.id === diaId);
   const otherIdx = idx + dir;
@@ -273,6 +335,10 @@ document.addEventListener('click', async (e) => {
     await supabase.from('clientes').update({ nombre }).eq('id', clienteId);
     await cargarTodo();
   }
+
+  if (accion === 'toggle-historial') {
+    await toggleDetalleHistorial(btn.dataset.id, btn);
+  }
 });
 
 document.addEventListener('submit', async (e) => {
@@ -301,3 +367,4 @@ document.addEventListener('submit', async (e) => {
 });
 
 cargarTodo();
+cargarHistorial();
