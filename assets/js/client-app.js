@@ -96,14 +96,16 @@ async function renderDiasView() {
 }
 
 function renderDias(rutina, dias) {
-  app.className = 'page';
+  app.className = '';
   app.innerHTML = `
-    <div class="topbar">
-      <img src="/assets/img/logo.png" alt="Artabria" class="brand-logo">
+    <div class="hero-logo-wrap">
+      <img src="/assets/img/logo.png" alt="Artabria" class="hero-logo">
     </div>
-    <h1>Hola, ${escapeHtml(primerNombre(clienteActual.nombre))}</h1>
-    <p class="muted">${rutina ? escapeHtml(rutina.nombre) : 'Aún no tienes una rutina asignada'}</p>
-    <div class="stack mt-16" id="lista-dias"></div>
+    <div class="page hero-page">
+      <h1>Hola, ${escapeHtml(primerNombre(clienteActual.nombre))}</h1>
+      <p class="muted">${rutina ? escapeHtml(rutina.nombre) : 'Aún no tienes una rutina asignada'}</p>
+      <div class="stack mt-16" id="lista-dias"></div>
+    </div>
   `;
 
   const cont = document.getElementById('lista-dias');
