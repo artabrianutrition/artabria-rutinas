@@ -259,11 +259,35 @@ input:focus, select:focus, textarea:focus {
 }
 
 .checkbox-big {
+  appearance: none;
+  -webkit-appearance: none;
   width: 42px;
   height: 42px;
   flex-shrink: 0;
-  accent-color: var(--gold);
+  margin: 0;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-elevated-2);
   cursor: pointer;
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.checkbox-big:checked {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+.checkbox-big:checked::after {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 9px;
+  width: 10px;
+  height: 18px;
+  border: solid #171208;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
 }
 
 .input-set input[type="number"] {
