@@ -99,7 +99,7 @@ function renderDias(rutina, dias) {
   app.className = 'page';
   app.innerHTML = `
     <div class="topbar">
-      <div class="brand">Artabria</div>
+      <img src="/assets/img/logo.png" alt="Artabria" class="brand-logo">
     </div>
     <h1>Hola, ${escapeHtml(primerNombre(clienteActual.nombre))}</h1>
     <p class="muted">${rutina ? escapeHtml(rutina.nombre) : 'Aún no tienes una rutina asignada'}</p>

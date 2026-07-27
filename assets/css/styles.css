@@ -64,6 +64,19 @@ a:hover { color: var(--gold-hover); }
   letter-spacing: 0.03em;
 }
 
+.brand-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+}
+
+.brand-logo-lg {
+  display: block;
+  height: 108px;
+  width: auto;
+  margin: 0 auto;
+}
+
 /* ---------- Layout ---------- */
 
 .page {
