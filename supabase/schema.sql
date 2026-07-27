@@ -128,6 +128,12 @@ begin
     raise exception 'No autenticado';
   end if;
 
+  -- libera cualquier otro cliente que estuviera ligado a esta misma sesión
+  -- (p. ej. el entrenador probando varios enlaces desde el mismo dispositivo)
+  update clientes
+  set auth_user_id = null
+  where auth_user_id = auth.uid() and codigo <> p_codigo;
+
   update clientes
   set auth_user_id = auth.uid()
   where codigo = p_codigo and activo = true
