@@ -38,6 +38,7 @@ create table rutinas (
   id uuid primary key default gen_random_uuid(),
   cliente_id uuid not null references clientes(id) on delete cascade,
   nombre text not null,
+  notas text,
   activa boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -46,6 +47,7 @@ create table dias (
   id uuid primary key default gen_random_uuid(),
   rutina_id uuid not null references rutinas(id) on delete cascade,
   nombre text not null,
+  notas text,
   orden int not null default 0
 );
 

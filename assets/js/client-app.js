@@ -104,6 +104,7 @@ function renderDias(rutina, dias) {
     <div class="page hero-page">
       <h1>Hola, ${escapeHtml(primerNombre(clienteActual.nombre))}</h1>
       <p class="muted">${rutina ? escapeHtml(rutina.nombre) : 'Aún no tienes una rutina asignada'}</p>
+      ${rutina?.notas ? `<div class="card mt-16"><h3 style="margin:0 0 8px">Notas de la rutina</h3><p class="hint" style="white-space:pre-line">${escapeHtml(rutina.notas)}</p></div>` : ''}
       <div class="stack mt-16" id="lista-dias"></div>
       <button class="btn btn-ghost btn-block mt-16" id="btn-ver-historial">Ver historial</button>
     </div>
@@ -236,6 +237,7 @@ function renderSesion(dia, ejercicios, sesion, prevMap, curMap) {
       <span class="badge badge-gold">${formatFecha(sesion.fecha)}</span>
     </div>
     <h1>${escapeHtml(dia.nombre)}</h1>
+    ${dia.notas ? `<div class="card mb-16"><p class="hint" style="white-space:pre-line">${escapeHtml(dia.notas)}</p></div>` : ''}
     <div class="stack" id="lista-ejercicios"></div>
     <div class="bottom-bar">
       <div class="bottom-bar-inner">

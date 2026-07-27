@@ -97,8 +97,20 @@ function renderRutina() {
     return;
   }
 
+  const notasRutinaHtml = `
+    <div class="card">
+      <div class="row">
+        <h3 style="margin:0">Notas de la rutina</h3>
+        <button class="btn btn-ghost btn-sm" data-accion="editar-notas-rutina">✎ Editar</button>
+      </div>
+      ${state.rutina.notas ? `<p class="hint mt-8" style="white-space:pre-line">${escapeHtml(state.rutina.notas)}</p>` : '<p class="hint mt-8">Sin notas.</p>'}
+      <div data-form-notas-rutina></div>
+    </div>
+  `;
+
   const diasHtml = state.dias.map((dia, idx) => renderDiaCard(dia, idx, state.dias.length)).join('');
   cont.innerHTML = `
+    ${notasRutinaHtml}
     <div class="stack">${diasHtml}</div>
     <button class="btn btn-outline btn-block mt-16" data-accion="nuevo-dia">+ Añadir día</button>
   `;
@@ -116,13 +128,31 @@ function renderDiaCard(dia, idx, total) {
           <button class="btn btn-icon btn-ghost btn-sm" data-accion="subir-dia" data-id="${dia.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
           <button class="btn btn-icon btn-ghost btn-sm" data-accion="bajar-dia" data-id="${dia.id}" ${idx === total - 1 ? 'disabled' : ''}>↓</button>
           <button class="btn btn-icon btn-ghost btn-sm" data-accion="renombrar-dia" data-id="${dia.id}" data-nombre="${escapeHtml(dia.nombre)}">✎</button>
+          <button class="btn btn-icon btn-ghost btn-sm" data-accion="editar-notas-dia" data-id="${dia.id}" title="Notas del día">📝</button>
           <button class="btn btn-icon btn-danger btn-sm" data-accion="eliminar-dia" data-id="${dia.id}">✕</button>
         </div>
       </div>
+      ${dia.notas ? `<p class="hint mt-8" style="white-space:pre-line">${escapeHtml(dia.notas)}</p>` : ''}
+      <div data-form-notas-dia="${dia.id}"></div>
       <div class="stack mt-16">${filas || '<p class="hint">Sin ejercicios todavía.</p>'}</div>
       <button class="btn btn-outline btn-sm mt-16" data-accion="nuevo-ejercicio" data-dia="${dia.id}">+ Ejercicio</button>
       <div data-form-ejercicio="${dia.id}"></div>
     </div>
+  `;
+}
+
+function formNotasHTML(valorActual) {
+  return `
+    <form class="card mt-8" data-form-notas-real="1">
+      <div class="field">
+        <label>Notas</label>
+        <textarea name="notas" rows="6">${escapeHtml(valorActual || '')}</textarea>
+      </div>
+      <div class="flex gap-8">
+        <button type="submit" class="btn btn-primary grow">Guardar</button>
+        <button type="button" class="btn btn-ghost" data-accion="cancelar-notas">Cancelar</button>
+      </div>
+    </form>
   `;
 }
 
@@ -338,6 +368,44 @@ document.addEventListener('click', async (e) => {
 
   if (accion === 'toggle-historial') {
     await toggleDetalleHistorial(btn.dataset.id, btn);
+  }
+
+  if (accion === 'editar-notas-rutina') {
+    document.querySelectorAll('[data-form-notas-dia], [data-form-notas-rutina]').forEach((el) => (el.innerHTML = ''));
+    const slot = document.querySelector('[data-form-notas-rutina]');
+    slot.innerHTML = formNotasHTML(state.rutina.notas);
+    slot.querySelector('form').dataset.tipo = 'rutina';
+    slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  if (accion === 'editar-notas-dia') {
+    document.querySelectorAll('[data-form-notas-dia], [data-form-notas-rutina]').forEach((el) => (el.innerHTML = ''));
+    const dia = state.dias.find((d) => d.id === btn.dataset.id);
+    const slot = document.querySelector(`[data-form-notas-dia="${btn.dataset.id}"]`);
+    slot.innerHTML = formNotasHTML(dia?.notas);
+    const form = slot.querySelector('form');
+    form.dataset.tipo = 'dia';
+    form.dataset.id = btn.dataset.id;
+    slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  if (accion === 'cancelar-notas') {
+    render();
+  }
+});
+
+document.addEventListener('submit', async (e) => {
+  const formNotas = e.target.closest('[data-form-notas-real]');
+  if (formNotas) {
+    e.preventDefault();
+    const fd = new FormData(formNotas);
+    const notas = fd.get('notas').trim() || null;
+    if (formNotas.dataset.tipo === 'rutina') {
+      await supabase.from('rutinas').update({ notas }).eq('id', state.rutina.id);
+    } else {
+      await supabase.from('dias').update({ notas }).eq('id', formNotas.dataset.id);
+    }
+    await cargarTodo();
   }
 });
 
