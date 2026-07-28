@@ -66,7 +66,9 @@ create table sesiones (
   dia_id uuid not null references dias(id) on delete cascade,
   cliente_id uuid not null references clientes(id) on delete cascade,
   fecha timestamptz not null default now(),
-  completada boolean not null default false
+  completada boolean not null default false,
+  fatiga smallint,
+  notas text
 );
 
 create table registros_series (
@@ -76,6 +78,7 @@ create table registros_series (
   numero_serie int not null,
   peso numeric,
   reps int,
+  rir text,
   completada boolean not null default false,
   created_at timestamptz not null default now(),
   unique (sesion_id, ejercicio_id, numero_serie)

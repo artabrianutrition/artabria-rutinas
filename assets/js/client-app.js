@@ -198,21 +198,39 @@ async function abrirDia(diaId) {
   renderSesion(dia, ejercicios || [], sesion, prevMap, curMap);
 }
 
+function opcionesRir(valorActual) {
+  const opciones = [
+    ['', 'RIR'],
+    ['fallo', 'Fallo'],
+    ['0', '0'],
+    ['1', '1'],
+    ['2', '2'],
+    ['3', '3'],
+    ['4', '4'],
+    ['5', '5'],
+  ];
+  return opciones
+    .map(([val, label]) => `<option value="${val}" ${valorActual === val ? 'selected' : ''}>${label}</option>`)
+    .join('');
+}
+
 function renderEjercicioCard(ej, prevMap, curMap) {
   const filas = Array.from({ length: ej.series })
     .map((_, i) => {
       const n = i + 1;
       const prev = prevMap[`${ej.id}_${n}`];
       const cur = curMap[`${ej.id}_${n}`];
-      // Si aún no hay nada guardado en esta sesión, se parte del peso/reps de la
-      // sesión anterior (editable) en vez de dejar el campo vacío.
+      // Si aún no hay nada guardado en esta sesión, se parte del peso/reps/RIR de
+      // la sesión anterior (editable) en vez de dejar los campos vacíos.
       const pesoValue = cur?.peso ?? prev?.peso ?? '';
       const repsValue = cur?.reps ?? prev?.reps ?? '';
+      const rirValue = cur?.rir ?? prev?.rir ?? '';
       return `
         <div class="input-set" data-ejercicio="${ej.id}" data-serie="${n}">
           <span class="muted" style="width:16px;flex-shrink:0">${n}</span>
           <input type="number" step="0.5" inputmode="decimal" class="input-num campo-peso" placeholder="kg" value="${pesoValue}">
           <input type="number" inputmode="numeric" class="input-num campo-reps" placeholder="reps" value="${repsValue}">
+          <select class="input-num campo-rir">${opcionesRir(rirValue)}</select>
           <input type="checkbox" class="checkbox-big campo-completada" ${cur?.completada ? 'checked' : ''}>
         </div>`;
     })
@@ -268,6 +286,22 @@ function renderSesion(dia, ejercicios, sesion, prevMap, curMap) {
     <h1>${escapeHtml(dia.nombre)}</h1>
     ${dia.notas ? `<div class="card mb-16"><p class="hint" style="white-space:pre-line">${escapeHtml(dia.notas)}</p></div>` : ''}
     <div class="stack" id="lista-ejercicios"></div>
+    <div class="card mt-16">
+      <h3 style="margin:0 0 12px">Cómo ha ido la sesión</h3>
+      <div class="field">
+        <label>Fatiga (1 = muy poca, 10 = extrema)</label>
+        <select id="campo-fatiga">
+          <option value="">Sin marcar</option>
+          ${Array.from({ length: 10 }, (_, i) => i + 1)
+            .map((n) => `<option value="${n}" ${sesion.fatiga === n ? 'selected' : ''}>${n}</option>`)
+            .join('')}
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Anotaciones (opcional)</label>
+        <textarea id="campo-notas-sesion" rows="3" placeholder="¿Cómo te has sentido? ¿Algo que quieras comentar?">${escapeHtml(sesion.notas || '')}</textarea>
+      </div>
+    </div>
     <div class="bottom-bar">
       <div class="bottom-bar-inner">
         <button class="btn btn-primary btn-block" id="btn-terminar">Terminar sesión</button>
@@ -286,6 +320,7 @@ function renderSesion(dia, ejercicios, sesion, prevMap, curMap) {
     const guardar = () => guardarSerie(sesion.id, ejercicioId, numeroSerie, row);
     row.querySelector('.campo-peso').addEventListener('blur', guardar);
     row.querySelector('.campo-reps').addEventListener('blur', guardar);
+    row.querySelector('.campo-rir').addEventListener('change', guardar);
     row.querySelector('.campo-completada').addEventListener('change', guardar);
   });
 
@@ -293,13 +328,29 @@ function renderSesion(dia, ejercicios, sesion, prevMap, curMap) {
     btn.addEventListener('click', () => toggleProgreso(btn.dataset.ejercicio, btn));
   });
 
+  document.getElementById('campo-fatiga').addEventListener('change', (e) => {
+    guardarSesionMeta(sesion.id, { fatiga: e.target.value === '' ? null : Number(e.target.value) });
+  });
+  document.getElementById('campo-notas-sesion').addEventListener('blur', (e) => {
+    guardarSesionMeta(sesion.id, { notas: e.target.value.trim() || null });
+  });
+
   document.getElementById('btn-volver').addEventListener('click', renderDiasView);
   document.getElementById('btn-terminar').addEventListener('click', () => terminarSesion(sesion.id));
+}
+
+async function guardarSesionMeta(sesionId, cambios) {
+  const { error } = await supabase.from('sesiones').update(cambios).eq('id', sesionId);
+  if (error) {
+    console.error(error);
+    mostrarToast('No se pudo guardar. Comprueba tu conexión e inténtalo de nuevo.');
+  }
 }
 
 async function guardarSerie(sesionId, ejercicioId, numeroSerie, row) {
   const pesoVal = row.querySelector('.campo-peso').value;
   const repsVal = row.querySelector('.campo-reps').value;
+  const rirVal = row.querySelector('.campo-rir').value;
   const completada = row.querySelector('.campo-completada').checked;
 
   const { error } = await supabase.from('registros_series').upsert(
@@ -309,6 +360,7 @@ async function guardarSerie(sesionId, ejercicioId, numeroSerie, row) {
       numero_serie: numeroSerie,
       peso: pesoVal === '' ? null : Number(pesoVal),
       reps: repsVal === '' ? null : Number(repsVal),
+      rir: rirVal === '' ? null : rirVal,
       completada,
     },
     { onConflict: 'sesion_id,ejercicio_id,numero_serie' }

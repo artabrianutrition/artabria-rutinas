@@ -40,7 +40,7 @@ export function linkCliente(codigo) {
   return `${window.location.origin}/c/${codigo}`;
 }
 
-function renderDetalleSesionHtml(registros) {
+function renderDetalleSesionHtml(registros, sesionMeta) {
   const porEjercicio = {};
   (registros || []).forEach((r) => {
     const nombre = r.ejercicios?.nombre || 'Ejercicio';
@@ -51,31 +51,51 @@ function renderDetalleSesionHtml(registros) {
 
   const ejerciciosOrdenados = Object.entries(porEjercicio).sort((a, b) => a[1].orden - b[1].orden);
 
-  if (!ejerciciosOrdenados.length) {
-    return '<p class="hint">Sin datos registrados en esta sesión.</p>';
+  const metaHtml = [];
+  if (sesionMeta?.fatiga != null) {
+    metaHtml.push(
+      `<div class="card card-tight"><strong>Fatiga</strong><div class="faint">${sesionMeta.fatiga} / 10</div></div>`
+    );
+  }
+  if (sesionMeta?.notas) {
+    metaHtml.push(
+      `<div class="card card-tight"><strong>Anotaciones</strong><div class="faint">${escapeHtml(sesionMeta.notas)}</div></div>`
+    );
   }
 
-  return ejerciciosOrdenados
+  if (!ejerciciosOrdenados.length) {
+    return metaHtml.join('') || '<p class="hint">Sin datos registrados en esta sesión.</p>';
+  }
+
+  const ejerciciosHtml = ejerciciosOrdenados
     .map(([nombre, info]) => {
       const seriesTxt = info.series
         .sort((a, b) => a.numero_serie - b.numero_serie)
-        .map((r) => `${r.peso ?? '–'} kg × ${r.reps ?? '–'} reps${r.completada ? '' : ' (sin marcar)'}`)
+        .map((r) => {
+          const rirTxt = r.rir ? ` · RIR ${r.rir}` : '';
+          return `${r.peso ?? '–'} kg × ${r.reps ?? '–'} reps${rirTxt}${r.completada ? '' : ' (sin marcar)'}`;
+        })
         .join(' · ');
       return `<div class="card card-tight"><strong>${escapeHtml(nombre)}</strong><div class="faint">${seriesTxt}</div></div>`;
     })
     .join('');
+
+  return metaHtml.join('') + ejerciciosHtml;
 }
 
 export async function obtenerDetalleSesionHtml(sesionId) {
-  const { data: registros, error } = await supabase
-    .from('registros_series')
-    .select('numero_serie, peso, reps, completada, ejercicios(nombre, orden)')
-    .eq('sesion_id', sesionId);
+  const [{ data: registros, error }, { data: sesionMeta }] = await Promise.all([
+    supabase
+      .from('registros_series')
+      .select('numero_serie, peso, reps, rir, completada, ejercicios(nombre, orden)')
+      .eq('sesion_id', sesionId),
+    supabase.from('sesiones').select('fatiga, notas').eq('id', sesionId).single(),
+  ]);
 
   if (error) {
     return `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
   }
-  return renderDetalleSesionHtml(registros);
+  return renderDetalleSesionHtml(registros, sesionMeta);
 }
 
 function claseComparacion(actual, anterior) {
