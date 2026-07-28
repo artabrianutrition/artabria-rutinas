@@ -529,8 +529,13 @@ th {
 .grow { flex-grow: 1; }
 .oculto { display: none; }
 
-.mejor-marca {
-  color: var(--gold);
+.valor-mejora {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.valor-empeora {
+  color: var(--danger);
   font-weight: 700;
 }
 
