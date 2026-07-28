@@ -529,6 +529,11 @@ th {
 .grow { flex-grow: 1; }
 .oculto { display: none; }
 
+.mejor-marca {
+  color: var(--gold);
+  font-weight: 700;
+}
+
 @media (min-width: 640px) {
   .page { padding-top: 40px; }
 }

@@ -77,3 +77,52 @@ export async function obtenerDetalleSesionHtml(sesionId) {
   }
   return renderDetalleSesionHtml(registros);
 }
+
+function renderProgresoEjercicioHtml(registros) {
+  if (!registros || !registros.length) {
+    return '<p class="hint">Todavía no hay sesiones terminadas registradas para este ejercicio.</p>';
+  }
+
+  const porSesion = {};
+  registros.forEach((r) => {
+    if (!porSesion[r.sesion_id]) {
+      porSesion[r.sesion_id] = { fecha: r.sesiones?.fecha, series: [] };
+    }
+    porSesion[r.sesion_id].series.push(r);
+  });
+
+  const sesiones = Object.values(porSesion).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+  let mejorPeso = null;
+  sesiones.forEach((s) =>
+    s.series.forEach((r) => {
+      if (r.peso != null && (mejorPeso === null || r.peso > mejorPeso)) mejorPeso = r.peso;
+    })
+  );
+
+  return sesiones
+    .map((s) => {
+      const seriesTxt = s.series
+        .sort((a, b) => a.numero_serie - b.numero_serie)
+        .map((r) => {
+          const txt = `${r.peso ?? '–'} kg × ${r.reps ?? '–'}`;
+          return r.peso != null && r.peso === mejorPeso ? `<span class="mejor-marca">${txt} 🏆</span>` : txt;
+        })
+        .join(' · ');
+      return `<div class="card card-tight"><div class="faint">${formatFecha(s.fecha)}</div><div class="mt-8">${seriesTxt}</div></div>`;
+    })
+    .join('');
+}
+
+export async function obtenerProgresoEjercicioHtml(ejercicioId) {
+  const { data: registros, error } = await supabase
+    .from('registros_series')
+    .select('sesion_id, numero_serie, peso, reps, sesiones!inner(fecha, completada)')
+    .eq('ejercicio_id', ejercicioId)
+    .eq('sesiones.completada', true);
+
+  if (error) {
+    return `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+  }
+  return renderProgresoEjercicioHtml(registros);
+}

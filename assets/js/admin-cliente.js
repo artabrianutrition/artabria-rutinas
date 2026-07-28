@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient.js';
 import { requireAdmin, logout } from './admin-guard.js';
-import { escapeHtml, qs, linkCliente, formatFechaHora, obtenerDetalleSesionHtml } from './utils.js';
+import { escapeHtml, qs, linkCliente, formatFechaHora, obtenerDetalleSesionHtml, obtenerProgresoEjercicioHtml } from './utils.js';
 
 const clienteId = qs('id');
 if (!clienteId) {
@@ -167,12 +167,39 @@ function renderEjercicioRow(diaId, ej, idx, total) {
         <div class="flex gap-8">
           <button class="btn btn-icon btn-ghost btn-sm" data-accion="subir-ejercicio" data-dia="${diaId}" data-id="${ej.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
           <button class="btn btn-icon btn-ghost btn-sm" data-accion="bajar-ejercicio" data-dia="${diaId}" data-id="${ej.id}" ${idx === total - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn btn-icon btn-ghost btn-sm" data-accion="ver-progreso" data-id="${ej.id}" title="Progreso">📈</button>
           <button class="btn btn-icon btn-ghost btn-sm" data-accion="editar-ejercicio" data-dia="${diaId}" data-id="${ej.id}">✎</button>
           <button class="btn btn-icon btn-danger btn-sm" data-accion="eliminar-ejercicio" data-id="${ej.id}">✕</button>
         </div>
       </div>
+      <div class="stack mt-8 oculto" data-progreso-ejercicio="${ej.id}"></div>
     </div>
   `;
+}
+
+const progresoCache = {};
+
+async function toggleProgresoEjercicio(ejercicioId, btn) {
+  const card = btn.closest('.card');
+  const slot = card.querySelector(`[data-progreso-ejercicio="${ejercicioId}"]`);
+  const estabaOculto = slot.classList.contains('oculto');
+
+  if (!estabaOculto) {
+    slot.classList.add('oculto');
+    return;
+  }
+
+  slot.classList.remove('oculto');
+
+  if (progresoCache[ejercicioId]) {
+    slot.innerHTML = progresoCache[ejercicioId];
+    return;
+  }
+
+  slot.innerHTML = `<div class="text-center"><span class="spinner"></span></div>`;
+  const html = await obtenerProgresoEjercicioHtml(ejercicioId);
+  progresoCache[ejercicioId] = html;
+  slot.innerHTML = html;
 }
 
 function formEjercicioHTML(ej) {
@@ -368,6 +395,10 @@ document.addEventListener('click', async (e) => {
 
   if (accion === 'toggle-historial') {
     await toggleDetalleHistorial(btn.dataset.id, btn);
+  }
+
+  if (accion === 'ver-progreso') {
+    await toggleProgresoEjercicio(btn.dataset.id, btn);
   }
 
   if (accion === 'editar-notas-rutina') {

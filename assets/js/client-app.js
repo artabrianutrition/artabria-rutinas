@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient.js';
-import { escapeHtml, formatFecha, obtenerDetalleSesionHtml } from './utils.js';
+import { escapeHtml, formatFecha, obtenerDetalleSesionHtml, obtenerProgresoEjercicioHtml } from './utils.js';
 
 const app = document.getElementById('app');
 
@@ -226,7 +226,36 @@ function renderEjercicioCard(ej, prevMap, curMap) {
       </div>
       ${ej.notas ? `<p class="hint">${escapeHtml(ej.notas)}</p>` : ''}
       <div class="stack mt-16">${filas}</div>
+      <button class="btn btn-ghost btn-sm mt-16" data-accion="ver-progreso" data-ejercicio="${ej.id}">Ver progreso</button>
+      <div class="stack mt-8 oculto" data-progreso="${ej.id}"></div>
     </div>`;
+}
+
+const progresoCache = {};
+
+async function toggleProgreso(ejercicioId, btn) {
+  const card = btn.closest('.card');
+  const slot = card.querySelector(`[data-progreso="${ejercicioId}"]`);
+  const estabaOculto = slot.classList.contains('oculto');
+
+  if (!estabaOculto) {
+    slot.classList.add('oculto');
+    btn.textContent = 'Ver progreso';
+    return;
+  }
+
+  slot.classList.remove('oculto');
+  btn.textContent = 'Ocultar progreso';
+
+  if (progresoCache[ejercicioId]) {
+    slot.innerHTML = progresoCache[ejercicioId];
+    return;
+  }
+
+  slot.innerHTML = `<div class="text-center"><span class="spinner"></span></div>`;
+  const html = await obtenerProgresoEjercicioHtml(ejercicioId);
+  progresoCache[ejercicioId] = html;
+  slot.innerHTML = html;
 }
 
 function renderSesion(dia, ejercicios, sesion, prevMap, curMap) {
@@ -258,6 +287,10 @@ function renderSesion(dia, ejercicios, sesion, prevMap, curMap) {
     row.querySelector('.campo-peso').addEventListener('blur', guardar);
     row.querySelector('.campo-reps').addEventListener('blur', guardar);
     row.querySelector('.campo-completada').addEventListener('change', guardar);
+  });
+
+  document.querySelectorAll('[data-accion="ver-progreso"]').forEach((btn) => {
+    btn.addEventListener('click', () => toggleProgreso(btn.dataset.ejercicio, btn));
   });
 
   document.getElementById('btn-volver').addEventListener('click', renderDiasView);
