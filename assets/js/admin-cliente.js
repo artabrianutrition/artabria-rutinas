@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient.js';
 import { requireAdmin, logout } from './admin-guard.js';
-import { escapeHtml, qs, linkCliente, formatFechaHora, obtenerDetalleSesionHtml, obtenerProgresoEjercicioHtml } from './utils.js';
+import { escapeHtml, qs, linkCliente, formatFecha, formatFechaHora, obtenerDetalleSesionHtml, obtenerProgresoEjercicioHtml } from './utils.js';
+import Chart from 'https://esm.sh/chart.js@4/auto';
 
 const clienteId = qs('id');
 if (!clienteId) {
@@ -49,6 +50,7 @@ async function cargarTodo() {
   }
 
   render();
+  cargarProgreso();
 }
 
 function render() {
@@ -302,6 +304,247 @@ async function toggleDetalleHistorial(sesionId, filaEl) {
   const html = await obtenerDetalleSesionHtml(sesionId);
   detalleHistorialCache[sesionId] = html;
   slot.innerHTML = html;
+}
+
+// ---------------------------------------------------------------
+// Progreso
+// ---------------------------------------------------------------
+
+let chartVolumenSemanal = null;
+let chartEjercicio = null;
+
+const CHART_TEXT = '#a49d8c';
+const CHART_GRID = '#2b2a26';
+
+function formatKg(n) {
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(n);
+}
+
+function inicioSemana(fechaIso) {
+  const d = new Date(fechaIso);
+  const diaSemana = (d.getDay() + 6) % 7; // lunes = 0
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - diaSemana);
+  return d;
+}
+
+function ejesBase(yLabel) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { color: CHART_TEXT },
+        grid: { color: CHART_GRID },
+        title: { display: true, text: yLabel, color: CHART_TEXT },
+      },
+      x: { ticks: { color: CHART_TEXT }, grid: { display: false } },
+    },
+  };
+}
+
+async function cargarProgreso() {
+  const cont = document.getElementById('contenido-progreso');
+  if (!cont) return;
+  cont.innerHTML = `<div class="text-center"><span class="spinner"></span></div>`;
+
+  const { data: registros, error } = await supabase
+    .from('registros_series')
+    .select('sesion_id, peso, reps, sesiones!inner(fecha, completada, cliente_id)')
+    .eq('sesiones.cliente_id', clienteId)
+    .eq('sesiones.completada', true);
+
+  if (error) {
+    cont.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  if (!registros.length) {
+    cont.innerHTML = `<div class="empty-state">Todavía no hay sesiones completadas para mostrar progreso.</div>`;
+    return;
+  }
+
+  const sesionesUnicas = new Set(registros.map((r) => r.sesion_id));
+  const volumenTotal = registros.reduce((acc, r) => acc + (r.peso && r.reps ? r.peso * r.reps : 0), 0);
+  const ultimaFecha = registros
+    .map((r) => new Date(r.sesiones.fecha))
+    .sort((a, b) => b - a)[0];
+  const diasDesdeUltima = Math.floor((Date.now() - ultimaFecha) / 86400000);
+
+  const porSemana = {};
+  registros.forEach((r) => {
+    if (!r.peso || !r.reps) return;
+    const inicio = inicioSemana(r.sesiones.fecha).getTime();
+    porSemana[inicio] = (porSemana[inicio] || 0) + r.peso * r.reps;
+  });
+  const semanas = Object.entries(porSemana)
+    .map(([ts, vol]) => ({ fecha: new Date(Number(ts)), vol }))
+    .sort((a, b) => a.fecha - b.fecha)
+    .slice(-10);
+
+  const tieneEjercicios = state.dias.some((d) => (d.ejercicios || []).length);
+
+  cont.innerHTML = `
+    <div class="stats-grid">
+      <div class="card card-tight text-center">
+        <div class="faint">Sesiones completadas</div>
+        <div class="stat-value">${sesionesUnicas.size}</div>
+      </div>
+      <div class="card card-tight text-center">
+        <div class="faint">Volumen total levantado</div>
+        <div class="stat-value">${formatKg(volumenTotal)} kg</div>
+      </div>
+      <div class="card card-tight text-center">
+        <div class="faint">Última sesión</div>
+        <div class="stat-value">${diasDesdeUltima <= 0 ? 'Hoy' : `Hace ${diasDesdeUltima}d`}</div>
+      </div>
+    </div>
+    <div class="card mt-16">
+      <h3 style="margin-top:0">Volumen semanal (todos los ejercicios)</h3>
+      <div class="chart-wrap" style="height:240px"><canvas id="grafico-volumen-semanal"></canvas></div>
+    </div>
+    ${
+      tieneEjercicios
+        ? `
+    <div class="card mt-16">
+      <div class="row">
+        <h3 style="margin:0">Progreso por ejercicio</h3>
+        <select id="selector-ejercicio-progreso" class="select-inline"></select>
+      </div>
+      <div class="chart-wrap mt-16" style="height:280px"><canvas id="grafico-ejercicio"></canvas></div>
+      <p class="hint mt-8">Barras = volumen de la sesión (peso × reps sumado). Línea = peso máximo movido en esa sesión.</p>
+    </div>`
+        : ''
+    }
+  `;
+
+  renderGraficoVolumenSemanal(semanas);
+  if (tieneEjercicios) poblarSelectorEjercicios();
+}
+
+function renderGraficoVolumenSemanal(semanas) {
+  const canvas = document.getElementById('grafico-volumen-semanal');
+  if (!canvas) return;
+  if (chartVolumenSemanal) chartVolumenSemanal.destroy();
+  chartVolumenSemanal = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: semanas.map((s) => formatFecha(s.fecha)),
+      datasets: [
+        {
+          label: 'Volumen (kg)',
+          data: semanas.map((s) => Math.round(s.vol)),
+          backgroundColor: 'rgba(201, 162, 75, 0.55)',
+          borderRadius: 6,
+          maxBarThickness: 40,
+        },
+      ],
+    },
+    options: ejesBase('Volumen (kg)'),
+  });
+}
+
+function poblarSelectorEjercicios() {
+  const sel = document.getElementById('selector-ejercicio-progreso');
+  if (!sel) return;
+  const opciones = [];
+  state.dias.forEach((dia) => {
+    (dia.ejercicios || []).forEach((ej) => {
+      opciones.push({ id: ej.id, label: `${dia.nombre} · ${ej.nombre}` });
+    });
+  });
+
+  const valorPrevio = sel.value;
+  sel.innerHTML = opciones.map((o) => `<option value="${o.id}">${escapeHtml(o.label)}</option>`).join('');
+  const sigueExistiendo = opciones.some((o) => o.id === valorPrevio);
+  sel.value = sigueExistiendo ? valorPrevio : opciones[0]?.id;
+
+  sel.onchange = () => renderGraficoEjercicio(sel.value);
+  if (sel.value) renderGraficoEjercicio(sel.value);
+}
+
+async function renderGraficoEjercicio(ejercicioId) {
+  const canvas = document.getElementById('grafico-ejercicio');
+  if (!canvas) return;
+
+  const { data: registros, error } = await supabase
+    .from('registros_series')
+    .select('sesion_id, peso, reps, sesiones!inner(fecha, completada)')
+    .eq('ejercicio_id', ejercicioId)
+    .eq('sesiones.completada', true);
+
+  if (chartEjercicio) {
+    chartEjercicio.destroy();
+    chartEjercicio = null;
+  }
+
+  if (error || !registros?.length) {
+    return;
+  }
+
+  const porSesion = {};
+  registros.forEach((r) => {
+    if (!porSesion[r.sesion_id]) {
+      porSesion[r.sesion_id] = { fecha: r.sesiones.fecha, pesoMax: 0, volumen: 0 };
+    }
+    if (r.peso) porSesion[r.sesion_id].pesoMax = Math.max(porSesion[r.sesion_id].pesoMax, r.peso);
+    if (r.peso && r.reps) porSesion[r.sesion_id].volumen += r.peso * r.reps;
+  });
+  const sesiones = Object.values(porSesion).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+  chartEjercicio = new Chart(canvas, {
+    data: {
+      labels: sesiones.map((s) => formatFecha(s.fecha)),
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Volumen (kg)',
+          data: sesiones.map((s) => Math.round(s.volumen)),
+          backgroundColor: 'rgba(122, 155, 110, 0.5)',
+          borderRadius: 6,
+          maxBarThickness: 40,
+          yAxisID: 'y',
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'Peso máximo (kg)',
+          data: sesiones.map((s) => s.pesoMax),
+          borderColor: '#c9a24b',
+          backgroundColor: '#c9a24b',
+          pointBackgroundColor: '#c9a24b',
+          tension: 0.3,
+          yAxisID: 'y1',
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#f2ede1' } } },
+      scales: {
+        y: {
+          position: 'left',
+          beginAtZero: true,
+          ticks: { color: CHART_TEXT },
+          grid: { color: CHART_GRID },
+          title: { display: true, text: 'Volumen (kg)', color: CHART_TEXT },
+        },
+        y1: {
+          position: 'right',
+          beginAtZero: true,
+          ticks: { color: CHART_TEXT },
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: 'Peso máx (kg)', color: CHART_TEXT },
+        },
+        x: { ticks: { color: CHART_TEXT }, grid: { display: false } },
+      },
+    },
+  });
 }
 
 async function moverDia(diaId, dir) {

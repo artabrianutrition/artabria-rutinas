@@ -548,6 +548,31 @@ th {
   font-weight: 700;
 }
 
+/* ---------- Progreso ---------- */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.stat-value {
+  font-family: var(--font-serif);
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--gold);
+  margin-top: 4px;
+}
+
+.select-inline {
+  max-width: 320px;
+}
+
+.chart-wrap {
+  position: relative;
+  width: 100%;
+}
+
 @media (min-width: 640px) {
   .page { padding-top: 40px; }
 }
