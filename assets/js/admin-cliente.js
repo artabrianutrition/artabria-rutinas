@@ -306,6 +306,102 @@ async function toggleDetalleHistorial(sesionId, filaEl) {
   slot.innerHTML = html;
 }
 
+async function obtenerDetalleRutinaHtml(rutinaId) {
+  const { data: rutina } = await supabase.from('rutinas').select('*').eq('id', rutinaId).single();
+  const { data: dias } = await supabase.from('dias').select('*').eq('rutina_id', rutinaId).order('orden');
+
+  let html = '';
+  if (rutina?.notas) {
+    html += `<p class="hint" style="white-space:pre-line">${escapeHtml(rutina.notas)}</p>`;
+  }
+
+  for (const dia of dias || []) {
+    const { data: ejercicios } = await supabase.from('ejercicios').select('*').eq('dia_id', dia.id).order('orden');
+    html += `
+      <div class="card card-tight mt-8">
+        <strong>${escapeHtml(dia.nombre)}</strong>
+        ${dia.notas ? `<p class="hint mt-8" style="white-space:pre-line">${escapeHtml(dia.notas)}</p>` : ''}
+        <div class="stack mt-8">
+          ${
+            (ejercicios || [])
+              .map(
+                (ej) =>
+                  `<div class="faint">${escapeHtml(ej.nombre)} — ${ej.series} × ${escapeHtml(ej.reps_objetivo)}${ej.notas ? ' · ' + escapeHtml(ej.notas) : ''}</div>`
+              )
+              .join('') || '<p class="hint">Sin ejercicios.</p>'
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  return html || '<p class="hint">Sin días registrados.</p>';
+}
+
+const rutinasAnterioresCache = {};
+
+async function cargarRutinasAnteriores() {
+  const cont = document.getElementById('contenido-rutinas-anteriores');
+  if (!cont) return;
+
+  const { data: rutinas, error } = await supabase
+    .from('rutinas')
+    .select('*')
+    .eq('cliente_id', clienteId)
+    .eq('activa', false)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    cont.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  if (!rutinas.length) {
+    cont.innerHTML = `<div class="empty-state">Este cliente todavía no tiene rutinas anteriores.</div>`;
+    return;
+  }
+
+  cont.innerHTML = '<div class="stack" id="lista-rutinas-anteriores"></div>';
+  const lista = document.getElementById('lista-rutinas-anteriores');
+  rutinas.forEach((r) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = `
+      <div class="row" style="cursor:pointer" data-accion="toggle-rutina-anterior" data-id="${r.id}">
+        <div>
+          <strong>${escapeHtml(r.nombre)}</strong>
+          <div class="faint">Desde ${formatFecha(r.created_at)}</div>
+        </div>
+        <span class="badge">Archivada</span>
+      </div>
+      <div class="stack mt-16 oculto" data-detalle-rutina-anterior="${r.id}"></div>
+    `;
+    lista.appendChild(el);
+  });
+}
+
+async function toggleRutinaAnterior(rutinaId, filaEl) {
+  const card = filaEl.closest('.card');
+  const slot = card.querySelector(`[data-detalle-rutina-anterior="${rutinaId}"]`);
+  const estabaOculto = slot.classList.contains('oculto');
+
+  if (!estabaOculto) {
+    slot.classList.add('oculto');
+    return;
+  }
+
+  slot.classList.remove('oculto');
+
+  if (rutinasAnterioresCache[rutinaId]) {
+    slot.innerHTML = rutinasAnterioresCache[rutinaId];
+    return;
+  }
+
+  slot.innerHTML = `<div class="text-center"><span class="spinner"></span></div>`;
+  const html = await obtenerDetalleRutinaHtml(rutinaId);
+  rutinasAnterioresCache[rutinaId] = html;
+  slot.innerHTML = html;
+}
+
 // ---------------------------------------------------------------
 // Progreso
 // ---------------------------------------------------------------
@@ -640,6 +736,10 @@ document.addEventListener('click', async (e) => {
     await toggleDetalleHistorial(btn.dataset.id, btn);
   }
 
+  if (accion === 'toggle-rutina-anterior') {
+    await toggleRutinaAnterior(btn.dataset.id, btn);
+  }
+
   if (accion === 'ver-progreso') {
     await toggleProgresoEjercicio(btn.dataset.id, btn);
   }
@@ -709,4 +809,5 @@ document.addEventListener('submit', async (e) => {
 });
 
 cargarTodo();
+cargarRutinasAnteriores();
 cargarHistorial();
