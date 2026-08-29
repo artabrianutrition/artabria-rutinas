@@ -73,7 +73,8 @@ function renderDetalleSesionHtml(registros, sesionMeta) {
         .sort((a, b) => a.numero_serie - b.numero_serie)
         .map((r) => {
           const rirTxt = r.rir ? ` · RIR ${r.rir}` : '';
-          return `${r.peso ?? '–'} kg × ${r.reps ?? '–'} reps${rirTxt}${r.completada ? '' : ' (sin marcar)'}`;
+          const repsTxt = r.reps_descendente ? r.reps_descendente.split('-').join(' → ') : r.reps ?? '–';
+          return `${r.peso ?? '–'} kg × ${repsTxt} reps${rirTxt}${r.completada ? '' : ' (sin marcar)'}`;
         })
         .join(' · ');
       return `<div class="card card-tight"><strong>${escapeHtml(nombre)}</strong><div class="faint">${seriesTxt}</div></div>`;
@@ -87,7 +88,7 @@ export async function obtenerDetalleSesionHtml(sesionId) {
   const [{ data: registros, error }, { data: sesionMeta }] = await Promise.all([
     supabase
       .from('registros_series')
-      .select('numero_serie, peso, reps, rir, completada, ejercicios(nombre, orden)')
+      .select('numero_serie, peso, reps, reps_descendente, rir, completada, ejercicios(nombre, orden)')
       .eq('sesion_id', sesionId),
     supabase.from('sesiones').select('fatiga, notas').eq('id', sesionId).single(),
   ]);

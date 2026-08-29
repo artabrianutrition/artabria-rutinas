@@ -214,27 +214,65 @@ function opcionesRir(valorActual) {
     .join('');
 }
 
+function tipoDescendente(ej) {
+  const texto = `${ej.reps_objetivo || ''} ${ej.notas || ''}`;
+  if (!/descendente/i.test(texto)) return null;
+  // "Última serie descendente" -> el drop-set es solo el remate final.
+  // "N series descendentes" (sin acotarlo a la última) -> cada serie del
+  // ejercicio es en sí misma un mini drop-set.
+  return /[uú]ltima/i.test(texto) ? 'ultima' : 'todas';
+}
+
+function renderFilaSet(ej, n, prevMap, curMap) {
+  const prev = prevMap[`${ej.id}_${n}`];
+  const cur = curMap[`${ej.id}_${n}`];
+  // Si aún no hay nada guardado en esta sesión, se parte del peso/reps/RIR de
+  // la sesión anterior (editable) en vez de dejar los campos vacíos.
+  const pesoValue = cur?.peso ?? prev?.peso ?? '';
+  const rirValue = cur?.rir ?? prev?.rir ?? '';
+  const completadaValue = cur?.completada ? 'checked' : '';
+
+  // Una serie con notación "descendente" (drop-set) se registra como hasta 5
+  // repeticiones encadenadas en vez de un único número. Si el texto lo acota a
+  // la "última serie", solo esa serie se muestra así; si no, todas.
+  const tipo = tipoDescendente(ej);
+  const esDescendenteAqui = tipo === 'todas' || (tipo === 'ultima' && n === ej.series);
+  if (esDescendenteAqui) {
+    const textoPrevio = cur?.reps_descendente ?? prev?.reps_descendente ?? '';
+    const valoresPrevios = textoPrevio ? textoPrevio.split('-') : [];
+    const camposReps = Array.from({ length: 5 })
+      .map((_, i) => {
+        const valor = (valoresPrevios[i] ?? '').trim();
+        const flecha = i > 0 ? '<span class="reps-descendente-flecha">→</span>' : '';
+        return `${flecha}<input type="number" inputmode="numeric" class="input-num-sm campo-reps-desc" data-idx="${i}" placeholder="–" value="${valor}">`;
+      })
+      .join('');
+    return `
+      <div class="input-set input-set-descendente" data-ejercicio="${ej.id}" data-serie="${n}">
+        <span class="muted" style="width:16px;flex-shrink:0">${n}</span>
+        <input type="number" step="0.5" inputmode="decimal" class="input-num campo-peso" placeholder="kg" value="${pesoValue}">
+        <select class="input-num campo-rir">${opcionesRir(rirValue)}</select>
+        <input type="checkbox" class="checkbox-big campo-completada" ${completadaValue}>
+        <div class="reps-descendente-grupo">
+          <span class="faint reps-descendente-label">Reps descendente</span>
+          <div class="reps-descendente-inputs">${camposReps}</div>
+        </div>
+      </div>`;
+  }
+
+  const repsValue = cur?.reps ?? prev?.reps ?? '';
+  return `
+    <div class="input-set" data-ejercicio="${ej.id}" data-serie="${n}">
+      <span class="muted" style="width:16px;flex-shrink:0">${n}</span>
+      <input type="number" step="0.5" inputmode="decimal" class="input-num campo-peso" placeholder="kg" value="${pesoValue}">
+      <input type="number" inputmode="numeric" class="input-num campo-reps" placeholder="reps" value="${repsValue}">
+      <select class="input-num campo-rir">${opcionesRir(rirValue)}</select>
+      <input type="checkbox" class="checkbox-big campo-completada" ${completadaValue}>
+    </div>`;
+}
+
 function renderEjercicioCard(ej, prevMap, curMap) {
-  const filas = Array.from({ length: ej.series })
-    .map((_, i) => {
-      const n = i + 1;
-      const prev = prevMap[`${ej.id}_${n}`];
-      const cur = curMap[`${ej.id}_${n}`];
-      // Si aún no hay nada guardado en esta sesión, se parte del peso/reps/RIR de
-      // la sesión anterior (editable) en vez de dejar los campos vacíos.
-      const pesoValue = cur?.peso ?? prev?.peso ?? '';
-      const repsValue = cur?.reps ?? prev?.reps ?? '';
-      const rirValue = cur?.rir ?? prev?.rir ?? '';
-      return `
-        <div class="input-set" data-ejercicio="${ej.id}" data-serie="${n}">
-          <span class="muted" style="width:16px;flex-shrink:0">${n}</span>
-          <input type="number" step="0.5" inputmode="decimal" class="input-num campo-peso" placeholder="kg" value="${pesoValue}">
-          <input type="number" inputmode="numeric" class="input-num campo-reps" placeholder="reps" value="${repsValue}">
-          <select class="input-num campo-rir">${opcionesRir(rirValue)}</select>
-          <input type="checkbox" class="checkbox-big campo-completada" ${cur?.completada ? 'checked' : ''}>
-        </div>`;
-    })
-    .join('');
+  const filas = Array.from({ length: ej.series }, (_, i) => renderFilaSet(ej, i + 1, prevMap, curMap)).join('');
 
   return `
     <div class="card">
@@ -319,7 +357,8 @@ function renderSesion(dia, ejercicios, sesion, prevMap, curMap) {
     const numeroSerie = Number(row.dataset.serie);
     const guardar = () => guardarSerie(sesion.id, ejercicioId, numeroSerie, row);
     row.querySelector('.campo-peso').addEventListener('blur', guardar);
-    row.querySelector('.campo-reps').addEventListener('blur', guardar);
+    row.querySelector('.campo-reps')?.addEventListener('blur', guardar);
+    row.querySelectorAll('.campo-reps-desc').forEach((input) => input.addEventListener('blur', guardar));
     row.querySelector('.campo-rir').addEventListener('change', guardar);
     row.querySelector('.campo-completada').addEventListener('change', guardar);
   });
@@ -349,9 +388,22 @@ async function guardarSesionMeta(sesionId, cambios) {
 
 async function guardarSerie(sesionId, ejercicioId, numeroSerie, row) {
   const pesoVal = row.querySelector('.campo-peso').value;
-  const repsVal = row.querySelector('.campo-reps').value;
   const rirVal = row.querySelector('.campo-rir').value;
   const completada = row.querySelector('.campo-completada').checked;
+
+  const camposDescendente = row.querySelectorAll('.campo-reps-desc');
+  let reps = null;
+  let repsDescendente = null;
+
+  if (camposDescendente.length) {
+    const valores = Array.from(camposDescendente)
+      .map((input) => input.value.trim())
+      .filter((v) => v !== '');
+    repsDescendente = valores.length ? valores.join('-') : null;
+  } else {
+    const repsVal = row.querySelector('.campo-reps').value;
+    reps = repsVal === '' ? null : Number(repsVal);
+  }
 
   const { error } = await supabase.from('registros_series').upsert(
     {
@@ -359,7 +411,8 @@ async function guardarSerie(sesionId, ejercicioId, numeroSerie, row) {
       ejercicio_id: ejercicioId,
       numero_serie: numeroSerie,
       peso: pesoVal === '' ? null : Number(pesoVal),
-      reps: repsVal === '' ? null : Number(repsVal),
+      reps,
+      reps_descendente: repsDescendente,
       rir: rirVal === '' ? null : rirVal,
       completada,
     },

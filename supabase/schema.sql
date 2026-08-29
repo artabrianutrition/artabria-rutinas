@@ -78,6 +78,7 @@ create table registros_series (
   numero_serie int not null,
   peso numeric,
   reps int,
+  reps_descendente text,
   rir text,
   completada boolean not null default false,
   created_at timestamptz not null default now(),
