@@ -227,8 +227,11 @@ function renderFilaSet(ej, n, prevMap, curMap) {
   const prev = prevMap[`${ej.id}_${n}`];
   const cur = curMap[`${ej.id}_${n}`];
   // Si aún no hay nada guardado en esta sesión, se parte del peso/reps/RIR de
-  // la sesión anterior (editable) en vez de dejar los campos vacíos.
-  const pesoValue = cur?.peso ?? prev?.peso ?? '';
+  // la sesión anterior (editable) en vez de dejar los campos vacíos. Si nunca
+  // se ha registrado nada (primera vez), se parte del objetivo marcado por el
+  // entrenador -si lo hay- como punto de partida, también editable.
+  const repsObjetivoNumerico = /^\d+$/.test((ej.reps_objetivo || '').trim()) ? ej.reps_objetivo.trim() : null;
+  const pesoValue = cur?.peso ?? prev?.peso ?? ej.peso_objetivo ?? '';
   const rirValue = cur?.rir ?? prev?.rir ?? '';
   const completadaValue = cur?.completada ? 'checked' : '';
 
@@ -260,7 +263,7 @@ function renderFilaSet(ej, n, prevMap, curMap) {
       </div>`;
   }
 
-  const repsValue = cur?.reps ?? prev?.reps ?? '';
+  const repsValue = cur?.reps ?? prev?.reps ?? repsObjetivoNumerico ?? '';
   return `
     <div class="input-set" data-ejercicio="${ej.id}" data-serie="${n}">
       <span class="muted" style="width:16px;flex-shrink:0">${n}</span>

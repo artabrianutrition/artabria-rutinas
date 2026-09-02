@@ -57,6 +57,7 @@ create table ejercicios (
   nombre text not null,
   series int not null,
   reps_objetivo text not null,
+  peso_objetivo numeric,
   notas text,
   orden int not null default 0
 );

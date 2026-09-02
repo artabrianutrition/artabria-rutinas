@@ -164,7 +164,7 @@ function renderEjercicioRow(diaId, ej, idx, total) {
       <div class="row">
         <div>
           <strong>${escapeHtml(ej.nombre)}</strong>
-          <div class="faint">${ej.series} × ${escapeHtml(ej.reps_objetivo)}${ej.notas ? ' · ' + escapeHtml(ej.notas) : ''}</div>
+          <div class="faint">${ej.series} × ${escapeHtml(ej.reps_objetivo)}${ej.peso_objetivo != null ? ` · Objetivo: ${ej.peso_objetivo} kg` : ''}${ej.notas ? ' · ' + escapeHtml(ej.notas) : ''}</div>
         </div>
         <div class="flex gap-8">
           <button class="btn btn-icon btn-ghost btn-sm" data-accion="subir-ejercicio" data-dia="${diaId}" data-id="${ej.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -220,6 +220,10 @@ function formEjercicioHTML(ej) {
           <label>Reps objetivo</label>
           <input type="text" name="reps_objetivo" placeholder="8-10, al fallo..." required value="${escapeHtml(ej?.reps_objetivo || '')}">
         </div>
+      </div>
+      <div class="field">
+        <label>Peso objetivo en kg (opcional)</label>
+        <input type="number" step="0.5" name="peso_objetivo" placeholder="Se prefija la 1ª vez; luego se sugiere lo último levantado" value="${ej?.peso_objetivo ?? ''}">
       </div>
       <div class="field">
         <label>Notas (opcional)</label>
@@ -795,6 +799,7 @@ document.addEventListener('submit', async (e) => {
     nombre: fd.get('nombre').trim(),
     series: Number(fd.get('series')),
     reps_objetivo: fd.get('reps_objetivo').trim(),
+    peso_objetivo: fd.get('peso_objetivo').trim() === '' ? null : Number(fd.get('peso_objetivo')),
     notas: fd.get('notas').trim() || null,
   };
 
