@@ -43,6 +43,7 @@ async function cargarTodo() {
         .from('ejercicios')
         .select('*')
         .eq('dia_id', dia.id)
+        .eq('activo', true)
         .order('orden');
       dia.ejercicios = ejercicios || [];
     }
@@ -720,8 +721,8 @@ document.addEventListener('click', async (e) => {
   }
 
   if (accion === 'eliminar-ejercicio') {
-    if (!confirm('¿Eliminar este ejercicio?')) return;
-    await supabase.from('ejercicios').delete().eq('id', btn.dataset.id);
+    if (!confirm('¿Quitar este ejercicio de la rutina? Se oculta (no se borra), así que su historial de series ya registradas se conserva.')) return;
+    await supabase.from('ejercicios').update({ activo: false }).eq('id', btn.dataset.id);
     await cargarTodo();
   }
 

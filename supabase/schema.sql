@@ -59,7 +59,8 @@ create table ejercicios (
   reps_objetivo text not null,
   peso_objetivo numeric,
   notas text,
-  orden int not null default 0
+  orden int not null default 0,
+  activo boolean not null default true
 );
 
 create table sesiones (

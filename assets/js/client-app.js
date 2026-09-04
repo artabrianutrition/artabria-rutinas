@@ -140,6 +140,7 @@ async function abrirDia(diaId) {
     .from('ejercicios')
     .select('*')
     .eq('dia_id', diaId)
+    .eq('activo', true)
     .order('orden');
 
   const { data: abiertas } = await supabase
