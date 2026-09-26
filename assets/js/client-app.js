@@ -217,13 +217,17 @@ function opcionesRir(valorActual) {
     .join('');
 }
 
-function tipoDescendente(ej) {
+function numSeriesDescendentes(ej) {
   const texto = `${ej.reps_objetivo || ''} ${ej.notas || ''}`;
-  if (!/descendente/i.test(texto)) return null;
-  // "Última serie descendente" -> el drop-set es solo el remate final.
-  // "N series descendentes" (sin acotarlo a la última) -> cada serie del
-  // ejercicio es en sí misma un mini drop-set.
-  return /[uú]ltima/i.test(texto) ? 'ultima' : 'todas';
+  if (!/descendente/i.test(texto)) return 0;
+  // "N series descendentes" -> las últimas N series del ejercicio son, cada
+  // una, un mini drop-set (ej. 5 series lineales + 3 series descendentes).
+  // Sin ese número: "última serie descendente" son solo la última (N=1); si
+  // tampoco se acota así, se asume que todas las series lo son.
+  const match = texto.match(/(\d+)\s*(?:x\s*)?series?\s+descendentes?/i);
+  if (match) return Math.min(Number(match[1]), ej.series);
+  if (/[uú]ltima/i.test(texto)) return 1;
+  return ej.series;
 }
 
 function renderFilaSet(ej, n, prevMap, curMap) {
@@ -240,10 +244,9 @@ function renderFilaSet(ej, n, prevMap, curMap) {
 
   // Una serie con notación "descendente" (drop-set) se registra como hasta
   // MAX_REPS_DESCENDENTE repeticiones encadenadas en vez de un único número.
-  // Si el texto lo acota a la "última serie", solo esa serie se muestra así;
-  // si no, todas.
-  const tipo = tipoDescendente(ej);
-  const esDescendenteAqui = tipo === 'todas' || (tipo === 'ultima' && n === ej.series);
+  // Afecta a las últimas N series del ejercicio (ver numSeriesDescendentes).
+  const numDescendentes = numSeriesDescendentes(ej);
+  const esDescendenteAqui = n > ej.series - numDescendentes;
   if (esDescendenteAqui) {
     const textoPrevio = cur?.reps_descendente ?? prev?.reps_descendente ?? '';
     const valoresPrevios = textoPrevio ? textoPrevio.split('-') : [];
