@@ -199,6 +199,8 @@ async function abrirDia(diaId) {
   renderSesion(dia, ejercicios || [], sesion, prevMap, curMap);
 }
 
+const MAX_REPS_DESCENDENTE = 6;
+
 function opcionesRir(valorActual) {
   const opciones = [
     ['', 'RIR'],
@@ -236,15 +238,16 @@ function renderFilaSet(ej, n, prevMap, curMap) {
   const rirValue = cur?.rir ?? prev?.rir ?? '';
   const completadaValue = cur?.completada ? 'checked' : '';
 
-  // Una serie con notación "descendente" (drop-set) se registra como hasta 5
-  // repeticiones encadenadas en vez de un único número. Si el texto lo acota a
-  // la "última serie", solo esa serie se muestra así; si no, todas.
+  // Una serie con notación "descendente" (drop-set) se registra como hasta
+  // MAX_REPS_DESCENDENTE repeticiones encadenadas en vez de un único número.
+  // Si el texto lo acota a la "última serie", solo esa serie se muestra así;
+  // si no, todas.
   const tipo = tipoDescendente(ej);
   const esDescendenteAqui = tipo === 'todas' || (tipo === 'ultima' && n === ej.series);
   if (esDescendenteAqui) {
     const textoPrevio = cur?.reps_descendente ?? prev?.reps_descendente ?? '';
     const valoresPrevios = textoPrevio ? textoPrevio.split('-') : [];
-    const camposReps = Array.from({ length: 5 })
+    const camposReps = Array.from({ length: MAX_REPS_DESCENDENTE })
       .map((_, i) => {
         const valor = (valoresPrevios[i] ?? '').trim();
         const flecha = i > 0 ? '<span class="reps-descendente-flecha">→</span>' : '';
